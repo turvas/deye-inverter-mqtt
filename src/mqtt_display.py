@@ -60,17 +60,17 @@ general_metrics_store = {
 
 # Mapping for friendly names of general metrics
 METRIC_NAME_MAPPING = {
-    'dc/total_power': 'Solar Power',
-    'battery/power': 'Battery Power',
-    'battery/soc': 'Battery SoC',
-    'ac/total_power': 'Grid Consumption Power',
-    'ac/ups/total_power': 'UPS Load Power',
+    'dc/total_power': '1. Solar Power',
+    'ac/total_power': '2. Grid Consumption Power',
+    'battery/power': '3. Battery Power',
+    'battery/soc': '4. Battery SoC',
+    'ac/ups/total_power': '5. UPS Load Power',
+    'settings/workmode': '6. Work Mode',
+    'settings/solar_sell': '7. Solar Sell Enabled',
+    'settings/battery/grid_charge': '8. Grid Charge Enabled',
     'settings/battery/maximum_charge_current': 'Max Charge Current',
     'settings/battery/maximum_discharge_current': 'Max Discharge Current',
     'settings/battery/maximum_grid_charge_current': 'Max Grid Charge Current',
-    'settings/battery/grid_charge': 'Grid Charge Enabled',
-    'settings/workmode': 'Work Mode',
-    'settings/solar_sell': 'Solar Sell Enabled',
 }
 
 last_update_time = None
@@ -206,12 +206,12 @@ def display_table():
             print("General Metrics:")
             general_metrics_table = PrettyTable()
             general_metrics_table.field_names = ["Metric", "Value"]
-            for key in sorted(general_metrics_store.keys()):
+            # Sort keys by their mapped friendly names
+            sorted_keys = sorted(general_metrics_store.keys(), key=lambda k: METRIC_NAME_MAPPING.get(k, k))
+            for key in sorted_keys:
                 metric_data = general_metrics_store[key]
                 colored_value = colorize_value(metric_data['current'], metric_data['previous'])
-                friendly_name = METRIC_NAME_MAPPING.get(key)
-                if not friendly_name:  # fallback just in case
-                    friendly_name = key
+                friendly_name = METRIC_NAME_MAPPING.get(key, key)
                 general_metrics_table.add_row([friendly_name, colored_value])
             print(general_metrics_table)
             print("\n" + "="*50 + "\n") # Separator
