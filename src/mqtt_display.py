@@ -41,9 +41,11 @@ MQTT_TOPIC_PREFIX = os.getenv('MQTT_TOPIC_PREFIX')
 #   },
 #   ...\
 # }
-data_store = {i: {param: {'current': None, 'previous': None} for param in ['time', 'power', 'soc', 'enabled', 'voltage']} for i in range(1, 7)}
+# TOU datasruct
+tou_data_store = {i: {param: {'current': None, 'previous': None} for param in ['time', 'power', 'soc', 'enabled', 'voltage']} for i in range(1, 7)}
 # Data structure to hold general metrics
 general_metrics_store = {
+    'dc/total_power': {'current': None, 'previous': None},
     'battery/power': {'current': None, 'previous': None},
     'battery/soc': {'current': None, 'previous': None},
     'ac/total_power': {'current': None, 'previous': None},
@@ -58,6 +60,7 @@ general_metrics_store = {
 
 # Mapping for friendly names of general metrics
 METRIC_NAME_MAPPING = {
+    'dc/total_power': 'Solar Power',
     'battery/power': 'Battery Power',
     'battery/soc': 'Battery SoC',
     'ac/total_power': 'Grid Consumption Power',
@@ -86,6 +89,7 @@ def on_connect(client, userdata, flags, rc, properties=None):
 
         # Subscribe to general metrics topics
         general_topics = [
+            'dc/total_power',
             'battery/power',
             'battery/soc',
             'ac/total_power',
@@ -131,7 +135,7 @@ def process_timeofuse(topic_parts: list, payload: str):
     object_number = int(topic_parts[-1])
     value = payload
     with data_lock:
-        if object_number in data_store:
+        if object_number in tou_data_store:
             # Attempt to convert to appropriate type
             if object_param in ['power', 'soc', 'voltage', 'time']:
                 try:
@@ -145,7 +149,7 @@ def process_timeofuse(topic_parts: list, payload: str):
                     value = value # keep as string if conversion fails
 
             # Update historic data
-            current_param_data = data_store[object_number][object_param]
+            current_param_data = tou_data_store[object_number][object_param]
             current_param_data['previous'] = current_param_data['current']
             current_param_data['current'] = value
             last_update_time = datetime.now()
@@ -157,7 +161,7 @@ def process_general_metric(metric_key, value_str):
     with data_lock:
         try:
             # Attempt to convert to appropriate type
-            if metric_key in ['battery/power', 'battery/soc', 'ac/total_power', 'ac/ups/total_power',
+            if metric_key in ['dc/total_power', 'battery/power', 'battery/soc', 'ac/total_power', 'ac/ups/total_power',
                              'settings/battery/maximum_charge_current', 'settings/battery/maximum_discharge_current',
                              'settings/battery/maximum_grid_charge_current']:
                 value = float(value_str)
@@ -213,8 +217,8 @@ def display_table():
             print("\n" + "="*50 + "\n") # Separator
 
             print("Time of Use Objects Data")
-            for obj_num in sorted(data_store.keys()):
-                obj_data = data_store[obj_num]
+            for obj_num in sorted(tou_data_store.keys()):
+                obj_data = tou_data_store[obj_num]
                 table.add_row([\
                     obj_num,\
                     colorize_value(obj_data['time']['current'], obj_data['time']['previous']),\
