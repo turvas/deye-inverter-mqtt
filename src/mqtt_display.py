@@ -5,6 +5,7 @@
 #     "paho-mqtt",
 #     "prettytable",
 #     "python-dotenv",
+#     "tzdata",
 # ]
 # ///
 
@@ -16,6 +17,7 @@ from datetime import datetime
 #import json
 import threading
 import time
+from zoneinfo import ZoneInfo
 from pathlib import Path
 from colorama import Fore, Style, init
 
@@ -29,6 +31,7 @@ MQTT_PORT = int(os.getenv('MQTT_PORT', 1883))
 MQTT_USERNAME = os.getenv('MQTT_USERNAME')
 MQTT_PASSWORD = os.getenv('MQTT_PASSWORD')
 MQTT_TOPIC_PREFIX = os.getenv('MQTT_TOPIC_PREFIX')
+DEYE_SET_TIME_TIMEZONE = os.getenv('DEYE_SET_TIME_TIMEZONE', "Europe/Tallinn")
 
 # Data structure to hold the latest received data for each object
 # {
@@ -75,6 +78,7 @@ METRIC_NAME_MAPPING = {
 
 last_update_time = None
 data_lock = threading.Lock()
+tz = ZoneInfo(DEYE_SET_TIME_TIMEZONE)
 
 def on_connect(client, userdata, flags, rc, properties=None):
     print(f"Connected with result code {rc}")
@@ -152,7 +156,7 @@ def process_timeofuse(topic_parts: list, payload: str):
             current_param_data = tou_data_store[object_number][object_param]
             current_param_data['previous'] = current_param_data['current']
             current_param_data['current'] = value
-            last_update_time = datetime.now()
+            last_update_time = datetime.now(tz)
         else:
             print(f"Received data for unknown object number: {object_number}")
 
@@ -176,7 +180,7 @@ def process_general_metric(metric_key, value_str):
             current_metric_data = general_metrics_store[metric_key]
             current_metric_data['previous'] = current_metric_data['current']
             current_metric_data['current'] = value
-            last_update_time = datetime.now()
+            last_update_time = datetime.now(tz)
         except ValueError:
             print(f"Could not convert value '{value_str}' for metric '{metric_key}'. Keeping as string.")
             general_metrics_store[metric_key]['previous'] = general_metrics_store[metric_key]['current']
@@ -237,7 +241,7 @@ def display_table():
         time.sleep(1) # Refresh every 1 second
 
 def main():
-    client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
+    client = mqtt.Client()  # mqtt.CallbackAPIVersion.VERSION2
     if MQTT_USERNAME and MQTT_PASSWORD:
         client.username_pw_set(MQTT_USERNAME, MQTT_PASSWORD)
     client.on_connect = on_connect
