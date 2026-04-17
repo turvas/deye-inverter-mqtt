@@ -65,9 +65,9 @@ general_metrics_store = {
 METRIC_NAME_MAPPING = {
     'dc/total_power': '1. Solar Power',
     'ac/total_power': '2. Grid Consumption Power',
-    'battery/power': '3. Battery Power',
+    'battery/power': '3. Battery Discharge Power',
     'battery/soc': '4. Battery SoC',
-    'ac/ups/total_power': '5. UPS Load Power',
+    'ac/ups/total_power': '5. Load Power (UPS)',
     'settings/workmode': '6. Work Mode',
     'settings/solar_sell': '7. Solar Sell Enabled',
     'settings/battery/grid_charge': '8. Grid Charge Enabled',
@@ -172,7 +172,13 @@ def process_general_metric(metric_key, value_str):
             elif metric_key in ['settings/battery/grid_charge', 'settings/solar_sell']:
                 value = bool(int(float(value_str))) # Assuming '0' or '1'
             elif metric_key == 'settings/workmode':
-                value = value_str # Keep as string
+                # value = value_str # Keep as string
+                if value_str == "0":
+                    value = f"{value_str}-SELLING_FIRST"
+                elif value_str == "1":
+                    value = f"{value_str}-ZERO_EXPORT_TO_LOAD"
+                else:   # 2
+                    value = f"{value_str}-ZERO_EXPOR T_TO_CT"
             else:
                 value = value_str # Default to string for unknown types
 
