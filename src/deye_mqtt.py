@@ -14,7 +14,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-
+from __future__ import annotations
 import logging
 import ssl
 import threading
@@ -192,6 +192,7 @@ class DeyeMqttClient:
             self.__log.warning(
                 f"Disconnected from MQTT Broker unexpectedly. Reason code: {rc}"
             )
+
         else:
             self.__log.info("Disconnected from MQTT Broker gracefully.")
         # The loop_start() method should handle reconnections automatically.
