@@ -1,11 +1,11 @@
 # /// script
 # requires-python = ">=3.11"
 # dependencies = [
-#     "colorama",
 #     "paho-mqtt",
 #     "prettytable",
 #     "python-dotenv",
 #     "tzdata",
+#     "colorama",
 # ]
 # ///
 
@@ -178,7 +178,7 @@ def process_general_metric(metric_key, value_str):
                 elif value_str == "1":
                     value = f"{value_str}-ZERO_EXPORT_TO_LOAD"
                 else:   # 2
-                    value = f"{value_str}-ZERO_EXPOR T_TO_CT"
+                    value = f"{value_str}-ZERO_EXPORT_TO_CT"
             else:
                 value = value_str # Default to string for unknown types
 
@@ -196,17 +196,60 @@ def process_general_metric(metric_key, value_str):
 def colorize_value(current_value, previous_value):
     if current_value is None:
         return 'N/A'
-    if previous_value is None or not isinstance(current_value, (int, float)) or not isinstance(previous_value, (int, float)):
-        return str(current_value)
+    
+    arrow = ''
+    if previous_value is not None and isinstance(current_value, (int, float)) and isinstance(previous_value, (int, float)):
+        if current_value > previous_value:
+            arrow = ' ↑'
+        elif current_value < previous_value:
+            arrow = ' ↓'
 
-    if current_value > previous_value:
-        return f"{Fore.GREEN}{current_value}{Style.RESET_ALL}"
-    elif current_value < previous_value:
-        return f"{Fore.RED}{current_value}{Style.RESET_ALL}"
+    return f"{current_value}{arrow}"
+
+def format_general_metric(key, metric_data):
+    current_value = metric_data['current']
+    previous_value = metric_data['previous']
+
+    if current_value is None:
+        return 'N/A'
+
+    # Arrow logic
+    arrow = ''
+    if previous_value is not None and isinstance(current_value, (int, float)) and isinstance(previous_value, (int, float)):
+        if current_value > previous_value:
+            arrow = ' ↑'
+        elif current_value < previous_value:
+            arrow = ' ↓'
+
+    val_str = str(current_value)
+    color = ''
+    
+    # Color logic
+    if key == 'ac/total_power': # grid consumption
+        if isinstance(current_value, (int, float)):
+            if current_value > 0: color = Fore.RED
+            elif current_value < 0: color = Fore.GREEN
+    elif key == 'battery/power': # battery discharge
+        if isinstance(current_value, (int, float)):
+            if current_value > 0: color = Fore.GREEN
+            elif current_value < 0: color = Fore.BLUE
+    elif key == 'settings/workmode':
+        if isinstance(current_value, str):
+            if current_value.startswith('0'): color = Fore.YELLOW # Selling First
+            elif current_value.startswith('1'): color = Fore.GREEN   # Zero Export to Load
+            elif current_value.startswith('2'): color = Fore.BLUE    # Zero Export to CT
+    elif key == 'settings/battery/grid_charge': # grid charge enabled
+        color = Fore.GREEN if current_value else Fore.RED
+    elif key == 'settings/solar_sell':
+        color = Fore.GREEN if current_value else Fore.RED
+
+    if color:
+        return f"{color}{val_str}{Style.RESET_ALL}{arrow}"
     else:
-        return str(current_value)
+        return f"{val_str}{arrow}"
 
 def display_table():
+    """main display function"""
     while True:
         os.system('cls' if os.name == 'nt' else 'clear') # Clear console
         table = PrettyTable()
@@ -220,9 +263,9 @@ def display_table():
             sorted_keys = sorted(general_metrics_store.keys(), key=lambda k: METRIC_NAME_MAPPING.get(k, k))
             for key in sorted_keys:
                 metric_data = general_metrics_store[key]
-                colored_value = colorize_value(metric_data['current'], metric_data['previous'])
+                formatted_value = format_general_metric(key, metric_data)
                 friendly_name = METRIC_NAME_MAPPING.get(key, key)
-                general_metrics_table.add_row([friendly_name, colored_value])
+                general_metrics_table.add_row([friendly_name, formatted_value])
             print(general_metrics_table)
             print("\n" + "="*50 + "\n") # Separator
 
