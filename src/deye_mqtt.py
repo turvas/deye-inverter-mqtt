@@ -206,11 +206,11 @@ class DeyeMqttClient:
                 "Processing %d pending subscriptions.",
                 len(self.__pending_subscriptions)
             )
-            subscriptions = self.__mqtt_client.get_subscriptions()
+            #subscriptions = self.__mqtt_client.get_subscriptions()  # paho doesn't expose this easily
             for topic, callback in list(self.__pending_subscriptions):
                 # Check if it's already subscribed to prevent duplicates if connection is unstable
-                if topic not in subscriptions:  # paho doesn't expose this easily
-                    self._perform_subscription(topic, callback)
+                #if topic not in subscriptions:
+                self._perform_subscription(topic, callback)
             # Remove from pending if successful, or keep if there was an error.
             # For now, we'll clear the whole list if all attempts succeed.
             # Clear pending subscriptions after attempting to process them
