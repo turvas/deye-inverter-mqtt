@@ -26,10 +26,11 @@ from colorama import Fore, Style, init
 script_dir = Path(__file__).parent
 load_dotenv(script_dir / "config.env", override=False)
 
-MQTT_HOST = os.getenv('MQTT_HOST')
-MQTT_PORT = int(os.getenv('MQTT_PORT', 1883))
-MQTT_USERNAME = os.getenv('MQTT_USERNAME')
-MQTT_PASSWORD = os.getenv('MQTT_PASSWORD')
+# different that producer creds with DISPLAY_ in middle
+MQTT_HOST = os.getenv('MQTT_DISPLAY_HOST')
+MQTT_PORT = int(os.getenv('MQTT_DISPLAY_PORT', 1883))
+MQTT_USERNAME = os.getenv('MQTT_DISPLAY_USERNAME')
+MQTT_PASSWORD = os.getenv('MQTT_DISPLAY_PASSWORD')
 MQTT_TOPIC_PREFIX = os.getenv('MQTT_TOPIC_PREFIX')
 DEYE_SET_TIME_TIMEZONE = os.getenv('DEYE_SET_TIME_TIMEZONE', "Europe/Tallinn")
 
@@ -79,10 +80,22 @@ METRIC_NAME_MAPPING = {
 last_update_time = None
 data_lock = threading.Lock()
 tz = ZoneInfo(DEYE_SET_TIME_TIMEZONE)
+mqtt_connected = False
+
+mqtt_failure_reasons = {
+    1: "Connection refused – incorrect protocol version",
+    2: "Connection refused – invalid client identifier",
+    3: "Connection refused – server unavailable",
+    4: "Connection refused – bad username or password",
+    5: "Connection refused – not authorised"
+}
 
 def on_connect(client, userdata, flags, rc, properties=None):
-    print(f"Connected with result code {rc}")
+
     if rc == 0:
+        print(f"Connected with result code {rc}")
+        global mqtt_connected
+        mqtt_connected = True
         base_topic = f"{MQTT_TOPIC_PREFIX}/timeofuse"
         # Subscribe to all relevant topics
         for obj_num in range(1, 7):
@@ -110,7 +123,9 @@ def on_connect(client, userdata, flags, rc, properties=None):
             client.subscribe(topic)
             print(f"Subscribed to {topic}")
     else:
-        print(f"Failed to connect, return code {rc}")
+        fail_reason = mqtt_failure_reasons.get(rc, "Unknown reason")
+        print(f"Failed to connect to {MQTT_HOST} as {MQTT_USERNAME}, return code {rc} - {fail_reason}")
+
 
 def on_message(client, userdata, msg):
     global last_update_time
@@ -160,6 +175,7 @@ def process_timeofuse(topic_parts: list, payload: str):
         else:
             print(f"Received data for unknown object number: {object_number}")
 
+
 def process_general_metric(metric_key, value_str):
     global last_update_time
     with data_lock:
@@ -206,6 +222,7 @@ def colorize_value(current_value, previous_value):
 
     return f"{current_value}{arrow}"
 
+
 def format_general_metric(key, metric_data):
     current_value = metric_data['current']
     previous_value = metric_data['previous']
@@ -232,7 +249,7 @@ def format_general_metric(key, metric_data):
     elif key == 'battery/power': # battery discharge
         if isinstance(current_value, (int, float)):
             if current_value > 0: color = Fore.GREEN
-            elif current_value < 0: color = Fore.BLUE
+            elif current_value < 0: color = Fore.CYAN
     elif key == 'settings/workmode':
         if isinstance(current_value, str):
             if current_value.startswith('0'): color = Fore.YELLOW # Selling First
@@ -250,44 +267,44 @@ def format_general_metric(key, metric_data):
 
 def display_table():
     """main display function"""
+    print("\nWaiting for data...")
     while True:
-        os.system('cls' if os.name == 'nt' else 'clear') # Clear console
-        table = PrettyTable()
-        table.field_names = ["Object Number", "Time", "Power", "SoC", "Enabled", "Voltage"]
+        if mqtt_connected:
+            os.system('cls' if os.name == 'nt' else 'clear')  # Clear console
+            table = PrettyTable()
+            table.field_names = ["Object Number", "Time", "Power", "SoC", "Enabled", "Voltage"]
 
-        with data_lock:
-            print("General Metrics:")
-            general_metrics_table = PrettyTable()
-            general_metrics_table.field_names = ["Metric", "Value"]
-            # Sort keys by their mapped friendly names
-            sorted_keys = sorted(general_metrics_store.keys(), key=lambda k: METRIC_NAME_MAPPING.get(k, k))
-            for key in sorted_keys:
-                metric_data = general_metrics_store[key]
-                formatted_value = format_general_metric(key, metric_data)
-                friendly_name = METRIC_NAME_MAPPING.get(key, key)
-                general_metrics_table.add_row([friendly_name, formatted_value])
-            print(general_metrics_table)
-            print("\n" + "="*50 + "\n") # Separator
+            with data_lock:
+                print("General Metrics:")
+                general_metrics_table = PrettyTable()
+                general_metrics_table.field_names = ["Metric", "Value"]
+                # Sort keys by their mapped friendly names
+                sorted_keys = sorted(general_metrics_store.keys(), key=lambda k: METRIC_NAME_MAPPING.get(k, k))
+                for key in sorted_keys:
+                    metric_data = general_metrics_store[key]
+                    formatted_value = format_general_metric(key, metric_data)
+                    friendly_name = METRIC_NAME_MAPPING.get(key, key)
+                    general_metrics_table.add_row([friendly_name, formatted_value])
+                print(general_metrics_table)
+                print("\n" + "="*50 + "\n") # Separator
 
-            print("Time of Use Objects Data")
-            for obj_num in sorted(tou_data_store.keys()):
-                obj_data = tou_data_store[obj_num]
-                table.add_row([\
-                    obj_num,\
-                    colorize_value(obj_data['time']['current'], obj_data['time']['previous']),\
-                    colorize_value(obj_data['power']['current'], obj_data['power']['previous']),\
-                    colorize_value(obj_data['soc']['current'], obj_data['soc']['previous']),\
-                    colorize_value(obj_data['enabled']['current'], obj_data['enabled']['previous']),\
-                    colorize_value(obj_data['voltage']['current'], obj_data['voltage']['previous'])\
-                ])
-
-            print(table)
-            if last_update_time:
-                print(f"\nLast Updated: {last_update_time.strftime('%Y-%m-%d %H:%M:%S')}")
-            else:
-                print("\nWaiting for data...")
-
-        time.sleep(1) # Refresh every 1 second
+                print("Time of Use Objects Data")
+                for obj_num in sorted(tou_data_store.keys()):
+                    obj_data = tou_data_store[obj_num]
+                    table.add_row([\
+                        obj_num,\
+                        colorize_value(obj_data['time']['current'], obj_data['time']['previous']),\
+                        colorize_value(obj_data['power']['current'], obj_data['power']['previous']),\
+                        colorize_value(obj_data['soc']['current'], obj_data['soc']['previous']),\
+                        colorize_value(obj_data['enabled']['current'], obj_data['enabled']['previous']),\
+                        colorize_value(obj_data['voltage']['current'], obj_data['voltage']['previous'])\
+                    ])
+                print(table)
+                if last_update_time:
+                    print(f"\nLast Updated: {last_update_time.strftime('%Y-%m-%d %H:%M:%S')}")
+                else:
+                    print(f"\nConnected to {MQTT_HOST} as {MQTT_USERNAME}, Waiting for data...")
+        time.sleep(1)  # Refresh every 1 second
 
 def main():
     client = mqtt.Client()  # mqtt.CallbackAPIVersion.VERSION2
